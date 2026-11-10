@@ -66,8 +66,6 @@ public:
 
   int64_t rdns() const { return tsc2ns(rdtsc()); }
 
-  // If you want cross-platform, use std::chrono as below which incurs one more function call:
-  // return std::chrono::high_resolution_clock::now().time_since_epoch().count();
   static int64_t rdsysns() {
     timespec ts;
     ::clock_gettime(CLOCK_REALTIME, &ts);

@@ -89,10 +89,6 @@ typedef void (*dealloc_func)(void *ptr);
 #if ENABLE_CONTROLLER
 template <class T, class P>
 class HashNodeWrapper {
-    // using MapType = phmap::parallel_flat_hash_map<
-    //     T, P, std::hash<T>, std::equal_to<T>,
-    //     std::allocator<std::pair<const T, P>>, 4, std::shared_mutex>;
-
     using MapType = phmap::parallel_flat_hash_map<
         T, P, std::hash<T>, std::equal_to<T>,
         std::allocator<std::pair<const T, P>>,
@@ -114,8 +110,8 @@ public:
     void upsert(const T& k, const P& v) {
         map.lazy_emplace_l(
             k,
-            [&](auto& val) { val.second = v; },  // 已存在则更新
-            [&](auto f)    { f(k, v); }           // 不存在则插入
+            [&](auto& val) { val.second = v; },
+            [&](auto f)    { f(k, v); }
         );
     }
 
@@ -139,10 +135,7 @@ public:
     }
 
     void reserve(size_t n) {
-        // std::cout << "before reserve: " << map.bucket_count() << std::endl;
-        // std::cout << "n:" << n <<std::endl;
         map.reserve(n);
-        // std::cout << "after reserve: " << map.bucket_count() << std::endl;
     }
 
     size_t size() const {
@@ -343,7 +336,6 @@ public:
           node->num_inserts = node->num_insert_to_data = 0;
           for(int i = 0; i < node->num_items; i++) node->items[i].typeVersionLockObsolete.store(0b100);
           for(int i = 0; i < node->num_items; i++) node->items[i].entry_type = 0;
-          // tree->pending_two[omp_get_thread_num()].push(node);
           tree->delete_items(node->items, node->num_items);
           tree->delete_nodes(node, 1);
         } else {
@@ -545,7 +537,6 @@ public:
   void insert(const V &v) { insert(v.first, v.second); }
   void insert(const T &key, const P &value) {
     EpochGuard guard(this);
-    // root = insert_tree(root, key, value);
 #if ENABLE_CONTROLLER
     bool state = insert_tree(key, value, guard.runtime_status());
 #else
@@ -595,7 +586,6 @@ public:
           if (needRestart)
             goto restart;
 
-          // RT_ASSERT(node->items[pos].comp.data.key == key);
           value = node->items[pos].comp.data.value;
           return true;
         }
@@ -608,7 +598,6 @@ public:
   void reclaim_retired_storage() { ebr->reclaim_all(); }
 
   bool exists(const T &key) const {
-    // EpochGuard guard;
     Node *node = root.load(std::memory_order_acquire);
     while (true) {
 #if ENABLE_CONTROLLER
@@ -1069,7 +1058,6 @@ private:
     std::atomic<int> size; // current subtree size
      // number of slots
     std::atomic<int> num_items;
-    // int num_items;
     LinearModel<T> model;
     Item *items;
   };
@@ -1511,7 +1499,6 @@ private:
             node->items[item_i].comp.data.key = keys[offset];
             node->items[item_i].comp.data.value = values[offset];
           } else {
-            // ASSERT(next - offset <= (size+2) / 3);
             node->items[item_i].entry_type = 1;
             node->items[item_i].comp.child = new_nodes(1);
             s.push((Segment){begin + offset, begin + next, level + 1,
@@ -1682,7 +1669,6 @@ private:
             node->items[item_i].comp.data.key = keys[offset];
             node->items[item_i].comp.data.value = values[offset];
           } else {
-            // RT_ASSERT(next - offset <= (size+2) / 3);
             node->items[item_i].entry_type = 1;
             node->items[item_i].comp.child = new_nodes(1);
             s.push((Segment){begin + offset, begin + next, level + 1,
@@ -2140,7 +2126,6 @@ private:
 
 #endif
 
-  // Node* insert_tree(Node *_node, const T &key, const P &value) {
   bool insert_tree(
       const T &key, const P &value
 #if ENABLE_CONTROLLER
@@ -2238,7 +2223,6 @@ private:
         }
 
         node->items[pos].entry_type = 1;
-        // printf("%d, %d\n", key, node->items[pos].comp.data.key);
         Node* new_node =
             build_tree_two(key, value, node->items[pos].comp.data.key,
                            node->items[pos].comp.data.value);
@@ -2261,7 +2245,6 @@ private:
       {
         parent = node;
         parent_pos = pos;
-        // RT_DEBUG("Child %p pos %d.", node, pos);
         node = node->items[pos].comp.child;           // now: node is the child
 
         parent->items[pos].readUnlockOrRestart(versionItem, needRestart);
@@ -2310,7 +2293,6 @@ private:
     }          // end for
 #endif
 
-    // return path[0];
     return true;
   } // end of insert_tree
 
@@ -2732,16 +2714,10 @@ public:
 
       if (convert_node_to_hash(info.node, info.parent, info.slot_idx)) {
         converted_count++;
-        // std::cout << "✓ Converted node at level " << info.level
-        //            << " with " << info.num_keys << " keys ["
-        //            << info.min_key << ", " << info.max_key << "]" << std::endl;
       } else {
         failed_count++;
       }
     }
-
-    // int compressed_count = 0;
-    // compress_nodes_outside_range(root, start_key, end_key, compressed_count);
 
     std::cout << "\n=== Zone Optimization Summary ===" << std::endl;
     std::cout << "Total nodes found: " << target_nodes.size() << std::endl;
@@ -2749,7 +2725,6 @@ public:
     std::cout << "Skipped (too small): " << skipped_count << std::endl;
     std::cout << "Failed conversions: " << failed_count << std::endl;
     std::cout << "Total keys in converted nodes: " << total_keys << std::endl;
-    // std::cout << "Compressed nodes outside range: " << compressed_count << std::endl;
     std::cout << "==================================\n" << std::endl;
   }
 

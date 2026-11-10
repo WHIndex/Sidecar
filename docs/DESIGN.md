@@ -68,9 +68,10 @@ min(ceil(current_size + cycle_insert_rate * horizon),
 
 Controllers publish decisions only. The next foreground operation reaching the
 target changes `NEED_HASH` or `NEED_REBUILD` to `IS_EXECUTING`, performs the
-replacement, retires the old node as `DELETED`, and continues on the new
-structure. LIPP hash conversion is restricted to sufficiently deep subtrees;
-ALEX conversion changes only the target leaf.
+maintenance, and continues on the resulting structure. LIPP replaces the
+selected subtree and retires the old nodes as `DELETED`; ALEX changes the
+storage representation of the selected leaf in place. LIPP hash conversion is
+restricted to sufficiently deep subtrees.
 
 ## Cold-node compaction
 

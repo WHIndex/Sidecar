@@ -241,13 +241,11 @@ public:
     // Decrease the #readers by 1, since it has been promoted to writer lock
     SUB(&lock_, 1);
 
-    // std::cout << "start the wait" << std::endl;
     // wait until the readers all exit the critical section
     v = __atomic_load_n(&lock_, __ATOMIC_ACQUIRE);
     while (v & lockMask) {
       v = __atomic_load_n(&lock_, __ATOMIC_ACQUIRE);
     }
-    // std::cout << "Finish the wait" << std::endl;
 
     return true;
   }
@@ -343,7 +341,6 @@ public:
   typedef typename Alloc::template rebind<uint64_t>::other bitmap_alloc_type;
 
 #if ENABLE_CONTROLLER
-  // mutable alex_controller::NodeMetadata shared_stats_;
   alex_controller::NodeMetadata* shared_stats_ptr_ = nullptr;
   bool is_hash_node_ = false;
   using HashTable = phmap::parallel_flat_hash_map<
@@ -1805,10 +1802,6 @@ public:
       return false;
     num_lookups_++;
 #if ENABLE_CONTROLLER
-    // if (is_hash_node_) {
-    //   *found = hash_table_->find(key, *payload);
-    //   return true;
-    // }
     if (is_hash_node_) {
       *found = hash_table_->if_contains(
           key, [&](const auto& entry) { *payload = entry.second; });
@@ -1853,10 +1846,6 @@ public:
         shared_stats_ptr_ && shared_stats_ptr_->has_task()) {
       handle_controller_flags();
     }
-    // if (is_hash_node_) {
-    //   *updated = hash_table_->update_fn(key, [payload](P& p) { p = payload; });
-    //   return true;
-    // }
     if (is_hash_node_) {
       *updated = hash_table_->modify_if(
           key, [&](auto& entry) { entry.second = payload; });
@@ -2091,13 +2080,10 @@ public:
 
 #if ENABLE_CONTROLLER
     if (is_hash_node_ && hash_table_) {
-      // Hash table is unordered, so we must collect entries >= key,
-      // sort them, and then return up to to_scan items.
       std::vector<V> entries;
       entries.reserve(hash_table_->size());
 
       for (const auto &kv : *hash_table_) {
-        // Keep entries whose key is >= the scan start key
         if (!Compare{}(kv.first, key)) {
           entries.emplace_back(kv.first, kv.second);
         }
@@ -2121,7 +2107,6 @@ public:
         result[scanned++] = entry;
       }
 
-      // Chain to the next leaf if we still need more results
       auto next_leaf = this->next_leaf_;
       if (scanned < static_cast<int>(to_scan) && next_leaf) {
         scanned += next_leaf->range_scan_by_size(
@@ -2226,9 +2211,6 @@ public:
     int upper_bound_pos = positions.second;
     if (!allow_duplicates && upper_bound_pos > 0 &&
       key_equal(ALEX_DATA_NODE_KEY_AT(upper_bound_pos - 1), key)) {
-// #if ENABLE_CONTROLLER
-//       num_conflicts_++;
-// #endif
       release_lock(); // If duplicate, release lock & return
 
       return {-1, upper_bound_pos - 1};
@@ -2292,11 +2274,6 @@ public:
       if (num_keys_ > max_slots_ * kMinDensity_) {
         return {3, -1};
       }
-      // Expand
-      // bool keep_left = is_append_mostly_right();
-      // bool keep_right = is_append_mostly_left();
-      // resize(kMinDensity_, false, keep_left, keep_right);
-      // num_resizes_++;
       return {5, -1};
     }
 
@@ -2963,8 +2940,6 @@ public:
     // Disable the contraction
     if (num_keys_ < contraction_threshold_) {
       // Don't release the lock since we could directly do the resizing
-      //resize(kMaxDensity_);
-      //num_resizes_++;
       return 2;
     }
 

@@ -52,7 +52,7 @@ def as_float(row, name):
 
 
 def mean(values):
-    return statistics.fmean(values) if values else 0.0
+    return sum(values) / len(values) if values else 0.0
 
 
 def confidence(values):
@@ -84,8 +84,8 @@ def parse_location(stats_path, raw_root):
         "dataset": dataset,
         "index": index,
         "workload": workload,
-        "threads": int(thread_dir.removeprefix("t")),
-        "seed": int(seed_dir.removeprefix("seed")),
+        "threads": int(thread_dir[1:]),
+        "seed": int(seed_dir[4:]),
         "variant": variant,
     }
 

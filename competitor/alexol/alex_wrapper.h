@@ -74,7 +74,6 @@ public:
         if (!data_node) return;
 
         std::ofstream csv_file(csv_path, std::ios::app);
-        // 仅在文件为空时写入表头
         if (csv_file.tellp() == 0) {
             csv_file << "compressed_nodes,memory_size_bytes" << std::endl;
         }
@@ -96,11 +95,6 @@ public:
                     total_compressed++;
                     batch_count++;
 
-                    // if (batch_count >= BATCH_SIZE) {
-                    //     long long current_size = memory_consumption();
-                    //     csv_file << total_compressed << "," << current_size << std::endl;
-                    //     batch_count = 0;
-                    // }
                 }
             }
             data_node = data_node->next_leaf_;
@@ -123,7 +117,6 @@ public:
         bool adjust_density = false) {
             if (adjust_density) return;
 #if ENABLE_CONTROLLER
-        // if (!adjust_density) {
         data_node_type* data_node = index.first_data_node();
         if (!data_node) {
             std::cout << "Warning: first datanode is null" << std::endl;
@@ -141,7 +134,6 @@ public:
 
         std::cout << "Scanning nodes in range [" << start_key << ", " << end_key << "]..." << std::endl;
 
-        // 遍历所有叶子节点
         while (data_node != nullptr) {
             bool in_range = false;
 
@@ -158,7 +150,6 @@ public:
                     data_node = data_node->next_leaf_;
                     continue;
                 }
-                // data_node->save_stats_to_csv(file_name);
                 auto convert_start = tn.rdtsc();
                 auto converted = data_node->convert_to_hash_node();
                 if (converted) converted_count++;
@@ -184,16 +175,8 @@ public:
             std::cout << "Average conversion time per node: " << total_convert_time / converted_count << " ns" << std::endl;
         }
         std::cout << "==================================\n" << std::endl;
-        // }
 #endif
-        // std::ofstream csv_file(file_name, std::ios::app);
-        // if (csv_file.tellp() == 0) {
-        //     csv_file << "compressed_nodes,memory_size_bytes" << std::endl;
-        // }
-        // long long current_size = memory_consumption();
-        // csv_file << 0 << "," << current_size << std::endl;
     }
-// #endif
 
    void generate_attack_keys(
     std::vector<KEY_TYPE>& attack_keys,
@@ -209,7 +192,7 @@ public:
 
     std::unordered_set<KEY_TYPE> unique_keys;
 
-    double ood_fraction = 0.02;  // 少部分OOD ~2%
+    double ood_fraction = 0.02;
     size_t root_budget = static_cast<size_t>(num_attack_keys * ood_fraction);
     size_t generated = 0;
     KEY_TYPE base = original_max + 1;
@@ -241,7 +224,7 @@ public:
 
     size_t hot_nodes = std::min<size_t>(500, dns.size());
     size_t remaining = num_attack_keys - unique_keys.size();
-    size_t base_per_node = remaining / hot_nodes / 2;  // 减少quota，poison ~15%
+    size_t base_per_node = remaining / hot_nodes / 2;
     size_t max_nodes_focus = std::min<size_t>(5, hot_nodes);
 
     std::cout << "Num data nodes: " << dns.size() << "\n";
@@ -391,12 +374,11 @@ public:
         }
     }
 
-    // Filler: 剩余大部分，使用非线性扭曲生成（多簇 + 幂律 + 正弦 + 间隙）
     KEY_TYPE filler_base = original_min;
     size_t filler_count = unique_keys.size();
     size_t num_remaining = num_attack_keys - filler_count;
 
-    size_t num_clusters = 20 + (gen() % 30);  // 20-50簇
+    size_t num_clusters = 20 + (gen() % 30);
     std::vector<KEY_TYPE> cluster_centers;
     std::uniform_int_distribution<KEY_TYPE> center_dis(original_min, original_max);
     for (size_t i = 0; i < num_clusters; ++i) {
@@ -418,24 +400,21 @@ public:
             if (k < original_min || k > original_max) continue;
 
             if (unique_keys.insert(k).second) {
-                // 成功插入，无duplicate
             } else {
-                k += (gen() % 100) + 1;  // 轻微调整避免duplicate
+                k += (gen() % 100) + 1;
                 if (k <= original_max) unique_keys.insert(k);
             }
         }
 
         if (c < num_clusters - 1) {
-            KEY_TYPE gap_size = (gen() % (1LL << 25)) + (1LL << 20);  // 大随机间隙，创建CDF平台
+            KEY_TYPE gap_size = (gen() % (1LL << 25)) + (1LL << 20);
             filler_base = cluster_centers[c + 1] + gap_size;
         }
     }
 
-    // 如果仍不足，稀疏填充 + 扭曲
     while (unique_keys.size() < num_attack_keys) {
         KEY_TYPE k = filler_base + static_cast<KEY_TYPE>(std::pow(static_cast<double>(filler_count % 10000), 1.3));
         if (unique_keys.insert(k).second) {
-            // 成功
         } else {
             k += (gen() % 100) + 1;
             unique_keys.insert(k);
@@ -460,7 +439,6 @@ public:
         std::cout << q << ": " << attack_keys[idx] << "\n";
     }
 
-    // Kurtosis计算（简单版，评估扭曲度）
     double mean = 0.0;
     for (auto k : attack_keys) mean += static_cast<double>(k);
     mean /= attack_keys.size();
@@ -533,17 +511,14 @@ private:
             }
         }
 
-        // Handle the case where the last region extends to the end
         if (current_length > 0) {
             regions.emplace_back(current_length, current_start);
         }
 
-        // Sort regions by length descending (largest first)
         std::sort(regions.begin(), regions.end(), [](const auto& a, const auto& b) {
             return a.first > b.first;
         });
 
-        // Return only the top_n regions, or all if fewer
         if (regions.size() > top_n) {
             regions.resize(top_n);
         }
@@ -557,7 +532,7 @@ template<class KEY_TYPE, class PAYLOAD_TYPE>
 void alexolInterface<KEY_TYPE, PAYLOAD_TYPE>::bulk_load(std::pair <KEY_TYPE, PAYLOAD_TYPE> *key_value, size_t num,
                                                         Param *param) {
     index.set_max_model_node_size(
-            1 << 25); // (22,15,66M) (22,16,89M) (22,17,91M) (22,18,81M) (23,17,92M) (21,17,92M) (20,17,92M)
+            1 << 25);
     index.set_max_data_node_size(1 << 19);
     std::cout << "start alex bulkload" << std::endl;
     index.bulk_load(key_value, (int) num);
@@ -580,9 +555,7 @@ void alexolInterface<KEY_TYPE, PAYLOAD_TYPE>::bulk_load(std::pair <KEY_TYPE, PAY
     double total_convert_time = 0.0;
     size_t total_keys = 0;
 
-    // 遍历所有叶子节点
     while (data_node != nullptr) {
-        // data_node->save_stats_to_csv(file_name);
         auto convert_start = tn.rdtsc();
         bool converted = false;
         #if ENABLE_CONTROLLER

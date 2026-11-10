@@ -114,7 +114,6 @@ struct System {
 #else
             // perf the cache misses of the file
             char buf[200];
-            //sprintf(buf, "perf stat -e cache-misses,cache-references,L1-dcache-load-misses,LLC-loads,LLC-load-misses,LLC-stores,LLC-store-misses,r412e -p %d > %s 2>&1",ppid,filename.c_str());
             sprintf(buf, "perf stat -p %d > %s 2>&1",ppid,filename.c_str());
             execl("/bin/sh", "sh", "-c", buf, NULL);
 #endif
@@ -132,7 +131,6 @@ struct System {
         kill(-pid, SIGINT);
 #endif
         sleep(1);
-//waitpid(pid,nullptr,0);
     }
 
     static void profile(std::function<void()> body) {

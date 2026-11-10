@@ -117,7 +117,6 @@ void LIPPOLInterface<KEY_TYPE, PAYLOAD_TYPE>::bulk_load(std::pair <KEY_TYPE, PAY
     lipp.bulk_load(key_value, static_cast<int>(num));
     auto memory = memory_consumption();
     std::cout << "Size after bulkload: " << memory << std::endl;
-    // lipp.diagnose_tree_structure();
 }
 
 template<class KEY_TYPE, class PAYLOAD_TYPE>
@@ -145,9 +144,5 @@ template<class KEY_TYPE, class PAYLOAD_TYPE>
 size_t LIPPOLInterface<KEY_TYPE, PAYLOAD_TYPE>::scan(KEY_TYPE key_low_bound, size_t key_num,
                                                    std::pair <KEY_TYPE, PAYLOAD_TYPE> *result,
                                                    Param *param) {
-    // if(!result) {
-    //     result = new std::pair <KEY_TYPE, PAYLOAD_TYPE>[key_num];
-    // }
-    // return lipp.range_query_len(result, key_low_bound, key_num);
     return 0;
 }

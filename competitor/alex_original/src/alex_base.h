@@ -51,7 +51,6 @@ typedef unsigned __int32 uint32_t;
 #define forceinline inline
 #endif
 
-//#define DEBUG_OUTPUT
 #if defined(DEBUG_OUTPUT)
 #define PRINT_DEBUG(format, ...) printf(format,##__VA_ARGS__)
 #else
@@ -166,7 +165,6 @@ class LinearModelBuilder {
     model_->a_ = slope;
     model_->b_ = intercept;
 
-    // If floating point precision errors, fit spline
     if (model_->a_ <= 0) {
       model_->a_ = (y_max_ - y_min_) / (x_max_ - x_min_);
       model_->b_ = -static_cast<double>(x_min_) * model_->a_;

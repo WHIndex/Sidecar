@@ -48,9 +48,6 @@ struct RuntimeSample {
   double priority{0.0};
 };
 
-// The header is deliberately independent of a node's physical layout.  Node
-// implementations update only the counters on their access paths; controller
-// threads consume snapshots and publish state transitions.
 struct alignas(64) RuntimeMetadata {
   using CoolingCallback = bool (*)(void*, RuntimeMetadata*);
 

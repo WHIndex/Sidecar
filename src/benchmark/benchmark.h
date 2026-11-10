@@ -265,7 +265,6 @@ public:
             }
 
             tbb::parallel_sort(init_keys.begin(), init_keys.end());
-            // save_keys_to_binary(init_keys, init_path);
         } else {
             init_table_size = init_keys.size();
         }
@@ -379,7 +378,6 @@ public:
                 pool_original_not_in_init.push_back(k);
             }
         }
-        // 打乱候选池以保证随机分配
         std::shuffle(pool_original_not_in_init.begin(), pool_original_not_in_init.end(), gen);
 
         zones[0].min_key = global_min;
@@ -397,7 +395,6 @@ public:
         zones[0].original_to_insert.assign(pool_original_not_in_init.begin(),
                                         pool_original_not_in_init.begin() + z0_take);
 
-        // 5. === Zone 1: Attack 分配 ===
         zones[1].min_key = cold_boundary;
         zones[1].max_key = global_max;
 
@@ -513,7 +510,6 @@ public:
         KEY_TYPE attack_max = attack_zone.max_key;
         double attack_range_dbl = static_cast<double>(attack_max) - static_cast<double>(attack_min);
 
-        // === 1. 生成触发点 ===
         double coverage_ratio = 0.6;
 
         for (int i = 0; i < num_optimizations; ++i) {
@@ -537,7 +533,6 @@ public:
             optimization_trigger_points.push_back(trigger_pos);
         }
 
-        // === 2. 生成优化范围 ===
         std::vector<double> ratios;
         double ratio_sum = 0.0;
 
@@ -569,7 +564,6 @@ public:
 
         std::reverse(optimization_ranges.begin(), optimization_ranges.end());
 
-        // === 3. 拆分 Zone 1 的 ops 为子 zones（只复制 ops，不复制键集合）===
         std::vector<size_t> split_points = {0};
         split_points.insert(split_points.end(), optimization_trigger_points.begin(), optimization_trigger_points.end());
         split_points.push_back(total_ops);
@@ -581,7 +575,6 @@ public:
             sub_zone.begin_index = start_idx;
             sub_zone.end_index = end_idx;
 
-            // 复制元数据
             sub_zone.min_key = attack_min;
             sub_zone.max_key = attack_max;
 
@@ -591,7 +584,6 @@ public:
                     << "), total " << (end_idx - start_idx) << " operations");
         }
 
-        // === 打印日志 ===
         COUT_THIS("Optimization triggers (total_ops=" << total_ops << "):");
         for (int i = 0; i < num_optimizations; ++i) {
             double range_size = static_cast<double>(optimization_ranges[i].second) -
@@ -1084,7 +1076,6 @@ public:
                     else next_boundary = current_compress_boundary + step;
                     index->compress_cold_zone(next_boundary, compress_path);
                     current_compress_boundary = next_boundary;
-                    // index->compress_cold_zone(final_boundary, compress_path);
                 }
                 if(scan_ratio==0) {
                     index->optimize_targeted_zones(
@@ -1106,15 +1097,6 @@ public:
 
 #if EXTRA
 
-        // if (!ban_compress) {
-        //     uint64_t opt_start = tn.rdtsc();
-        // // #if ENABLE_CONTROLLER
-        //     index->compress_cold_zone(zones[1].max_key, compress_path);
-        // // #endif
-        //     uint64_t opt_end = tn.rdtsc();
-        //     excluded_ns += (double)(tn.tsc2ns(opt_end) - tn.tsc2ns(opt_start));
-        // }
-
         {
             #pragma omp parallel num_threads(thread_num)
             {
@@ -1130,9 +1112,6 @@ public:
                         operations_num * latency_sample_ratio / thread_num * 1.2);
                 }
 
-                // #pragma omp barrier
-                // #pragma omp master
-                // start_time = tn.rdtsc();
                 auto &zone = zones[1];
                 size_t ops = zone.ops.size();
 
@@ -1152,18 +1131,9 @@ public:
             }
         }
 #endif
-        // if(!ban_compress && !adjust_density){
-        //     uint64_t opt_start = tn.rdtsc();
-        //     index->compress_cold_zone(final_boundary, compress_path);
-        //     uint64_t opt_end = tn.rdtsc();
-        //     excluded_ns +=
-        //         (double)(tn.tsc2ns(opt_end) - tn.tsc2ns(opt_start));
-        // }
-
         end_time = tn.rdtsc();
         printf("Finish running\n");
 
-        // ========== MERGE LATENCY & STATS ==========
         std::vector<std::pair<uint64_t, uint64_t>> all_lat;
         for (int i = 0; i < thread_num; ++i) {
             all_lat.insert(all_lat.end(),

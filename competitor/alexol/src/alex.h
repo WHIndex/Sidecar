@@ -827,10 +827,6 @@ public:
           if (bucketID_prediction_rounded <= bucketID_prediction) {
             // To be safe, need to snapshot the prev_leaf_
             auto prev_leaf = leaf->prev_leaf_;
-            /*
-std::cout << "I enter left " << std::endl;
-printf("prev last key is %.20f\n", prev_leaf->last_key());*/
-            // if (leaf->prev_leaf_ && leaf->prev_leaf_->last_key() >= key) {
             if (prev_leaf && prev_leaf->last_key() >= key) {
 
               if (traversal_path) {
@@ -844,10 +840,7 @@ printf("prev last key is %.20f\n", prev_leaf->last_key());*/
             }
           } else {
             auto next_leaf = leaf->next_leaf_;
-            // std::cout << "I enter right " << std::endl;
-            //  printf("next first key is %.20f\n", next_leaf->first_key());
             if (next_leaf && next_leaf->first_key() <= key) {
-              // if (leaf->next_leaf_ && leaf->next_leaf_->first_key() <= key) {
               if (traversal_path) {
                 // Correct the traversal path
                 correct_traversal_path(leaf, *traversal_path, false);
@@ -992,7 +985,6 @@ public:
             old_leaf->prev_leaf_) { // ensure to lock the correct node
           prev_leaf->next_leaf_ = left_leaf;
           left_leaf->prev_leaf_ = prev_leaf;
-          // prev_leaf->release_link_lock();
           break;
         } else {
           prev_leaf->release_link_lock();
@@ -1008,7 +1000,6 @@ public:
       right_leaf->next_leaf_ = next_leaf;
       next_leaf->prev_leaf_ = right_leaf;
     }
-    // old_leaf->release_link_lock();
   }
 
   void link_data_nodes_without_lock(data_node_type *old_leaf,
@@ -1325,7 +1316,6 @@ private:
       bool keep_right = false) {
     auto node = new (data_node_allocator().allocate(1))
         data_node_type(key_less_, allocator_);
-    // stats_.num_data_nodes++;
     if (tree_node) {
       // Use the model and num_keys saved in the tree node so we don't have to
       // recompute it
@@ -1842,7 +1832,6 @@ public:
       new_leaf->next_leaf_ = next_leaf;
       next_leaf->prev_leaf_ = new_leaf;
     }
-    // old_leaf->release_link_lock();
   }
 
   void release_link_locks_for_resizing(data_node_type *new_leaf) {
@@ -1874,32 +1863,6 @@ public:
   bool insert(const T &key, const P &payload) {
     EpochGuard guard;
   RETRY:
-    // If enough keys fall outside the key domain, expand the root to expand the
-    // key domain
-    // if (key > istats_.key_domain_max_) {
-    //   istats_.num_keys_above_key_domain++;
-    //   if (should_expand_right()) {
-    //     if (superroot_->try_get_write_lock()) {
-    //       if (should_expand_right()) {
-    //         expand_root(key, false); // expand to the right
-    //         // std::cout << "Should expand right" << std::endl;
-    //       }
-    //       superroot_->release_write_lock();
-    //     }
-    //   }
-    // } else if (key < istats_.key_domain_min_) {
-    //   istats_.num_keys_below_key_domain++;
-    //   if (should_expand_left()) {
-    //     if (superroot_->try_get_write_lock()) {
-    //       if (should_expand_left()) {
-    //         expand_root(key, true); // expand to the left
-    //         // std::cout << "Should expand left" << std::endl;
-    //       }
-    //       superroot_->release_write_lock();
-    //     }
-    //   }
-    // }
-
     data_node_type *leaf = get_leaf(key);
     if (!leaf) goto RETRY;
     // Nonzero fail flag means that the insert did not happen
@@ -1920,8 +1883,6 @@ public:
       }
 
       if (fail == 5) { // Data node resizing
-        // std::cout << "DN expansion with node scaling, key = " << key <<
-        // std::endl;
         // 1. Allocate new node
         data_node_type *node;
         data_node_type::New_from_existing(reinterpret_cast<void **>(&node),
@@ -1982,8 +1943,6 @@ public:
       }
 
       if (fanout_tree_depth == 0) {
-        // std::cout << "DN expansion with node retraining, key = " << key <<
-        // std::endl;
 #if ENABLE_CONTROLLER
         if (leaf->shared_stats_ptr_) {
           g_alex_controller.retire_node(leaf->shared_stats_ptr_);
@@ -2034,8 +1993,6 @@ public:
         release_link_locks_for_resizing(node);
         safe_delete_node(leaf);
       } else {
-        // std::cout << "DN split with node retraining, key = " << key <<
-        // std::endl;
         // split data node: always try to split sideways/upwards,
         // only split downwards if necessary
         bool reuse_model = (fail == 3);
@@ -2050,8 +2007,6 @@ public:
         }
       }
     }
-    // stats_.num_inserts++;
-    // stats_.num_keys++;
     thread_local int insert_counter(0);
     insert_counter = (insert_counter + 1) & counterMask;
     if (insert_counter == 0) {
@@ -2103,7 +2058,6 @@ public:
 
     split_left = left_leaf;
     split_right = right_leaf;
-    // link_data_nodes(old_node, left_leaf, right_leaf);
   }
 
   void create_new_data_nodes_without_parent(
@@ -2191,7 +2145,6 @@ public:
 
     if (should_split_downwards) {
 
-      // new (new_node) model_node_type(leaf->level_, allocator_);
       auto new_node = new (model_node_allocator().allocate(1))
           model_node_type(leaf->level_, allocator_);
 
@@ -2285,7 +2238,6 @@ public:
       bool parent_write_lock = false;
       if (fanout > repeats) {
         if (!parent->promote_from_read_to_write()) {
-          // std::cout << "Promote fails..." << std::endl;
           parent->release_read_lock();
           goto RETRAVEL;
         }
@@ -2644,8 +2596,6 @@ stop_cost =
     // to the new data nodes.
     int n = root->num_children_ - (new_nodes_end - new_nodes_start);
     assert(root->num_children_ % n == 0);
-    // auto new_node_duplication_factor =
-    //     static_cast<uint8_t>(log_2_round_down(n));
     int new_local_depth =
         log_2_round_down(root->num_children_) - log_2_round_down(n);
     if (expand_left) {
@@ -2761,8 +2711,6 @@ public:
 
     if (ret_flag == 2) {
       // Do the node contraction
-      // std::cout << "DN expansion with node scaling, key = " << key <<
-      // std::endl;
       // 1. Allocate new node
       data_node_type *node;
       data_node_type::New_from_existing(reinterpret_cast<void **>(&node), leaf);
@@ -2796,12 +2744,6 @@ public:
 
       release_link_locks_for_resizing(node);
       safe_delete_node(leaf);
-      // thread_local int resize_counter(0);
-      // resize_counter++;
-      // if (resize_counter % 10000 == 0) {
-      //   std::cout << "Now we have resized " << resize_counter << " times"
-      //             << std::endl;
-      // }
     }
 
     thread_local int erase_counter(0);
