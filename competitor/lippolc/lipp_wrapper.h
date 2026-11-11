@@ -144,5 +144,5 @@ template<class KEY_TYPE, class PAYLOAD_TYPE>
 size_t LIPPOLInterface<KEY_TYPE, PAYLOAD_TYPE>::scan(KEY_TYPE key_low_bound, size_t key_num,
                                                    std::pair <KEY_TYPE, PAYLOAD_TYPE> *result,
                                                    Param *param) {
-    return 0;
+    return lipp.range_query_len(result, key_low_bound, key_num);
 }

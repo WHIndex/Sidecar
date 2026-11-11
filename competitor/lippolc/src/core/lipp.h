@@ -157,6 +157,12 @@ public:
         });
     }
 
+    void get_all_items(std::vector<std::pair<T, P>>& items) const {
+        map.for_each([&](const auto& pair) {
+            items.emplace_back(pair.first, pair.second);
+        });
+    }
+
     void batch_insert(const std::vector<T>& keys, const std::vector<P>& values) {
         assert(keys.size() == values.size());
         for (size_t i = 0; i < keys.size(); ++i) {
@@ -215,6 +221,13 @@ template <class T, class P, bool USE_FMCD = false> class LIPP {
     }
 
     int size() const noexcept { return size_; }
+
+    void clear() noexcept {
+      size_ = 0;
+      if (overflow_ != nullptr) {
+        overflow_->clear();
+      }
+    }
   };
 
   inline int compute_gap_count(int size) {
@@ -897,6 +910,69 @@ public:
 #endif
   }
 
+  std::size_t range_query_len(std::pair<T, P>* results, const T& lower,
+                              std::size_t length) {
+    if (results == nullptr || length == 0) {
+      return 0;
+    }
+
+    int retries = 0;
+#if ENABLE_CONTROLLER
+    static thread_local NodePath visited;
+#else
+    NodePath visited;
+#endif
+    for (;;) {
+      {
+        EpochGuard guard(this);
+        auto* scan_root = root.load(std::memory_order_acquire);
+        std::size_t count = 0;
+        visited.clear();
+#if ENABLE_CONTROLLER
+        const auto controller_status = guard.runtime_status();
+        const bool consistent = range_core_len<false>(
+            results, count, scan_root, nullptr, -1, 0, lower, length,
+            controller_status.has_pending_tasks(),
+            controller_status.cooling_execution_active(),
+            controller_status.has_hash_nodes(), visited);
+#else
+        const bool consistent = range_core_len<false>(
+            results, count, scan_root, nullptr, -1, 0, lower, length,
+            false, false, false, visited);
+#endif
+        if (consistent &&
+            root.load(std::memory_order_acquire) == scan_root) {
+#if ENABLE_CONTROLLER
+          record_scan_access(visited);
+#endif
+          return count;
+        }
+      }
+
+#if ENABLE_CONTROLLER
+      if (++retries >= 16) {
+        std::unique_lock<std::mutex> maintenance_lock(maintenance_mutex_);
+        MaintenanceBarrierGuard maintenance_barrier(this);
+        auto* scan_root = root.load(std::memory_order_acquire);
+        std::size_t count = 0;
+        visited.clear();
+        const bool consistent = range_core_len<false>(
+            results, count, scan_root, nullptr, -1, 0, lower, length,
+            false, false, true, visited);
+        if (consistent &&
+            root.load(std::memory_order_acquire) == scan_root) {
+          record_scan_access(visited);
+          return count;
+        }
+        retries = 0;
+      }
+#else
+      ++retries;
+#endif
+      yield(retries);
+    }
+  }
+
   size_t total_size() const {
     std::stack < Node * > s;
     s.push(root.load(std::memory_order_acquire));
@@ -1061,6 +1137,138 @@ private:
     LinearModel<T> model;
     Item *items;
   };
+
+#if ENABLE_CONTROLLER
+  static void record_scan_access(const NodePath& visited) noexcept {
+    const auto access_time = index_controller::steady_now_ms();
+    for (int index = 0; index < visited.size(); ++index) {
+      auto* node = visited[index];
+      auto* runtime = node_metadata(node);
+      if (runtime != nullptr && runtime->is_node_valid()) {
+        runtime->record_lookup_at(
+            static_cast<std::size_t>(
+                std::max(0, node->size.load(std::memory_order_relaxed))),
+            access_time);
+      }
+    }
+  }
+#endif
+
+  template<bool SatisfyLower>
+  bool range_core_len(std::pair<T, P>* results, std::size_t& count,
+                      Node* node, Node* parent, int parent_position,
+                      int depth, const T& lower, std::size_t length,
+                      bool check_maintenance, bool check_cooling,
+                      bool has_hash_nodes, NodePath& visited) {
+    if (node == nullptr || count >= length) {
+      return true;
+    }
+
+#if ENABLE_CONTROLLER
+    auto* runtime =
+        runtime_for_control(node, check_maintenance, check_cooling);
+    if (check_cooling && runtime != nullptr) {
+      runtime->cancel_cooling_on_access();
+    }
+    if (check_maintenance && runtime != nullptr &&
+        UNLIKELY(runtime->has_task()) &&
+        process_maintenance(node, parent, parent_position, depth)) {
+      return false;
+    }
+#else
+    (void)parent;
+    (void)parent_position;
+    (void)check_maintenance;
+    (void)check_cooling;
+    (void)has_hash_nodes;
+#endif
+
+#if ENABLE_CONTROLLER
+    visited.push(node);
+#else
+    (void)visited;
+#endif
+
+#if ENABLE_CONTROLLER
+    if (UNLIKELY(has_hash_nodes && node_is_hash(node))) {
+      auto* hash_map = node_hash_map(node);
+      if (hash_map == nullptr) {
+        return false;
+      }
+      std::vector<std::pair<T, P>> entries;
+      entries.reserve(hash_map->size());
+      hash_map->get_all_items(entries);
+      std::sort(entries.begin(), entries.end(),
+                [](const auto& left, const auto& right) {
+                  return left.first < right.first;
+                });
+      auto iterator = entries.begin();
+      if (!SatisfyLower) {
+        iterator = std::lower_bound(
+            entries.begin(), entries.end(), lower,
+            [](const auto& entry, const T& key) {
+              return entry.first < key;
+            });
+      }
+      while (iterator != entries.end() && count < length) {
+        results[count++] = *iterator++;
+      }
+      return true;
+    }
+#endif
+
+    const int slots = node->num_items.load(std::memory_order_acquire);
+    const int first_position = SatisfyLower ? 0 : PREDICT_POS(node, lower);
+    int position = first_position;
+    while (position < slots && count < length) {
+      auto* item = &node->items[position];
+      bool restart = false;
+      const auto version = item->readLockOrRestart(restart);
+      if (restart) {
+        return false;
+      }
+
+      const auto type = item->entry_type;
+      if (type == 1) {
+        auto* child = item->comp.child;
+        item->readUnlockOrRestart(version, restart);
+        if (restart) {
+          return false;
+        }
+        const bool child_consistent =
+            !SatisfyLower && position == first_position
+                ? range_core_len<false>(
+                      results, count, child, node, position, depth + 1,
+                      lower, length, check_maintenance, check_cooling,
+                      has_hash_nodes, visited)
+                : range_core_len<true>(
+                      results, count, child, node, position, depth + 1,
+                      lower, length, check_maintenance, check_cooling,
+                      has_hash_nodes, visited);
+        item->checkOrRestart(version, restart);
+        if (!child_consistent || restart) {
+          return false;
+        }
+      } else if (type == 2) {
+        auto entry = std::make_pair(item->comp.data.key,
+                                    item->comp.data.value);
+        item->readUnlockOrRestart(version, restart);
+        if (restart) {
+          return false;
+        }
+        if (SatisfyLower || entry.first >= lower) {
+          results[count++] = std::move(entry);
+        }
+      } else {
+        item->readUnlockOrRestart(version, restart);
+        if (restart) {
+          return false;
+        }
+      }
+      ++position;
+    }
+    return true;
+  }
 
 #if ENABLE_CONTROLLER
   static constexpr std::uint32_t kFixedNodeMask = 0x80000000u;
