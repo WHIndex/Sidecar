@@ -1,20 +1,5 @@
 # Sidecar
 
-Sidecar is a runtime control framework for adapting updatable learned indexes
-to distribution shifts and changing access demand. It augments two index
-families without replacing their upper-level organization:
-
-- ALEX-style shift-based indexes monitor leaf nodes and can convert degraded
-  leaves to hash storage.
-- LIPP-style conflict-based indexes monitor every nonempty node and can rebuild
-  or convert a degraded subtree.
-- Both variants compact persistently cold nodes in a separately scheduled
-  background path.
-
-The controlled and baseline executables share the same benchmark driver. The
-baseline is compiled with all controller instrumentation disabled, which makes
-paired overhead and performance measurements reproducible.
-
 ## Build
 
 Requirements are a C++17 compiler, CMake 3.14 or newer, Intel oneTBB, and
